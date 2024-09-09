@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Preview with Frame Rate</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        video {
+            border: 2px solid #000;
+            border-radius: 8px;
+            /*    adapt screen size*/
+            width: 80%;
+            max-width: 1920px;
+            height: auto;
+        }
+
+        #framerate {
+            margin-top: 10px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<video id="webcam" autoplay playsinline></video>
+<div id="framerate">Frame Rate: Calculating...</div>
+<!--drop down for select cameras-->
+<label for="cameraSelect"></label><select id="cameraSelect"></select>
+<!--resolution drop down-->
+<label for="resolutionFramerateSelect"></label><select id="resolutionFramerateSelect"></select>
+
+
+<script>
+    const video = document.getElementById('webcam');
+    const framerateDisplay = document.getElementById('framerate');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const resolutionFramerateSelect = document.getElementById('resolutionFramerateSelect');
+
+    async function populateCameraList() {
+
+        const cameras = await navigator.mediaDevices.enumerateDevices();
+        cameras.forEach((camera, i) => {
+            if (camera.kind === 'videoinput') {
+                const option = document.createElement('option');
+                option.value = camera.deviceId;
+                option.text = camera.label || `Camera ${i + 1}`;
+                cameraSelect.appendChild(option);
+            }
+        });
+    }
+
+    // get support resolution for the selected camera
+    async function populatePropList(cameraId) {
+
+        // freeze cameraSelectdropdown
+        cameraSelect.disabled = true;
+        // show testing camera string in resolutionFramerateSelect
+        resolutionFramerateSelect.innerHTML = '<option>Testing Camera...</option>';
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                deviceId: cameraId
+                    ? {exact: cameraId}
+                    : cameraSelect.value ? {exact: cameraSelect.value} : undefined
+            }
+        });
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+
+        // close camera
+        stream.getTracks().forEach(track => track.stop());
+        const resolution_list_for_test = [
+            {
+                "width": 3840,
+                "height": 2160,
+            },
+            {
+                "width": 2560,
+                "height": 1440,
+            },
+            {
+                "width": 1920,
+                "height": 1080,
+            },
+            {
+                "width": 1600,
+                "height": 1200,
+            },
+            {
+                "width": 1280,
+                "height": 720,
+            },
+            {
+                "width": 800,
+                "height": 600,
+            },
+            {
+                "width": 640,
+                "height": 480,
+            },
+            {
+                "width": 640,
+                "height": 360,
+            }
+        ];
+        const frameRate_list = [120, 90, 60, 45, 30, 25, 24];
+        let supportedPropList = [];
+        //     width, height, frameRate
+
+        //     for loop to test camera using navigator.mediaDevices.getUserMedia()
+        succeedResolutions = [];
+
+        for (let i = 0; i < resolution_list_for_test.length; i++) {
+            // unique succeedResolutions list and get length
+
+            const resolution = resolution_list_for_test[i];
+            // if resolution is not within the capabilities, skip it
+            if (resolution.width > capabilities.width.max || resolution.height > capabilities.height.max
+                || resolution.width < capabilities.width.min || resolution.height < capabilities.height.min) {
+                continue;
+            }
+            succeedFrameRates = [];
+            //     for loop frameRate
+            for (let j = 0; j < frameRate_list.length; j++) {
+                const succeedFrameRatesLength = succeedFrameRates.filter((value, index, self) => self.indexOf(value) === index).length;
+                if (succeedFrameRatesLength > 2) {
+                    continue;
+                }
+                const frameRate = frameRate_list[j];
+                // if frameRate is not within the capabilities, skip it
+                if (frameRate > capabilities.frameRate.max || frameRate < capabilities.frameRate.min) {
+                    continue;
+                }
+                // test camera
+                const constraints = {
+                    audio: false,
+                    video: {
+                        deviceId: cameraId
+                            ? {exact: cameraId}
+                            : undefined,
+                        width: {exact: resolution.width},
+                        height: {exact: resolution.height},
+                        frameRate: {exact: frameRate}
+                    }
+                };
+                //     try catch
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    const videoTrack = stream.getVideoTracks()[0];
+                    // close camera
+                    stream.getTracks().forEach(track => track.stop());
+                    supportedPropList.push({resolution, frameRate});
+                    succeedResolutions.push(i);
+                    succeedFrameRates.push(j);
+                } catch (error) {
+                    console.error(`Camera: ${cameraId || 'default'} ResolutionFramerate: ${resolution.width}x${resolution.height}@${frameRate} is not supported`);
+                }
+            }
+            const succeedResolutionsLength = succeedResolutions.filter((value, index, self) => self.indexOf(value) === index).length;
+            if (succeedResolutionsLength > 2) {
+                break;
+            }
+
+        }
+        console.log(supportedPropList);
+        //     fill resolutionFramerate dropdown
+        resolutionFramerateSelect.innerHTML = '';
+        supportedPropList.forEach((prop, i) => {
+            const option = document.createElement('option');
+            option.value = i;
+            option.text = `${prop.resolution.width}x${prop.resolution.height}@${prop.frameRate}`;
+            resolutionFramerateSelect.appendChild(option);
+        });
+        cameraSelect.disabled = false;
+    }
+
+
+    let lastTime = performance.now();
+    let frameCount = 0;
+
+    function updateFrameRate() {
+        const currentTime = performance.now();
+        let deliveredFrames = video.srcObject.getVideoTracks()[0].stats.deliveredFrames
+        if (currentTime - lastTime >= 1000) {  // Update every second
+            const fps = deliveredFrames - frameCount;
+            framerateDisplay.textContent = `Frame Rate: ${fps} FPS`;
+            frameCount = deliveredFrames;
+            lastTime = currentTime;
+        }
+        requestAnimationFrame(updateFrameRate);
+    }
+
+    // function to init camera
+    async function initCamera() {
+        frameCount = 0;
+        // stop requestAnimationFrame
+        cancelAnimationFrame(updateFrameRate);
+        // get widthxheight@frameRate from dropdown
+        const index = resolutionFramerateSelect.value;
+        // split string to get width, height, frameRate
+        const resolutionFramerate = resolutionFramerateSelect.options[index].text.split('@');
+        const resolution = resolutionFramerate[0].split('x');
+        const frameRate = parseInt(resolutionFramerate[1]);
+        const width = parseInt(resolution[0]);
+        const height = parseInt(resolution[1]);
+
+        const constraints = {
+            audio: false,
+            video: {
+                deviceId: cameraSelect.value ? {exact: cameraSelect.value} : undefined,
+                width: {exact: width},
+                height: {exact: height},
+                frameRate: {exact: frameRate}
+            }
+        };
+        navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+            video.srcObject = stream;
+            frameCount = video.srcObject.getVideoTracks()[0].stats.deliveredFrames;
+            updateFrameRate();
+        });
+    }
+
+
+    navigator.mediaDevices.getUserMedia({video: true}).then(stream => {
+        video.srcObject = stream;
+        //     stop
+        video.srcObject.getTracks().forEach(track => track.stop());
+        populateCameraList().then(() => {
+            populatePropList().then(() => {
+                initCamera();
+            });
+        });
+    });
+
+    
+    cameraSelect.onchange = () => {
+        video.srcObject.getTracks().forEach(track => track.stop());
+        populatePropList().then(() => {
+            initCamera();
+        });
+    };
+    resolutionFramerateSelect.onchange = () => {
+        video.srcObject.getTracks().forEach(track => track.stop());
+        initCamera();
+    };
+    
+</script>
+
+</body>
+</html>
