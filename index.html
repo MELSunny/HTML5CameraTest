@@ -193,7 +193,7 @@
         let deliveredFrames = video.srcObject.getVideoTracks()[0].stats.deliveredFrames
         if (currentTime - lastTime >= 1000) {  // Update every second
             const fps = deliveredFrames - frameCount;
-            framerateDisplay.textContent = `Frame Rate: ${fps} FPS`;
+            framerateDisplay.textContent = `Actual Frame Rate: ${fps} FPS`;
             frameCount = deliveredFrames;
             lastTime = currentTime;
         }
