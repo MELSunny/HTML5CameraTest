@@ -61,7 +61,7 @@
     }
 
     // get support resolution for the selected camera
-    async function populatePropList(cameraId) {
+    async function populatePropList(selected_deviceId) {
 
         // freeze cameraSelectdropdown
         cameraSelect.disabled = true;
@@ -69,8 +69,8 @@
         resolutionFramerateSelect.innerHTML = '<option>Testing Camera...</option>';
         const stream = await navigator.mediaDevices.getUserMedia({
             video: {
-                deviceId: cameraId
-                    ? {exact: cameraId}
+                deviceId: selected_deviceId
+                    ? {exact: selected_deviceId}
                     : cameraSelect.value ? {exact: cameraSelect.value} : undefined
             }
         });
@@ -145,8 +145,8 @@
                 const constraints = {
                     audio: false,
                     video: {
-                        deviceId: cameraId
-                            ? {exact: cameraId}
+                        deviceId: selected_deviceId
+                            ? {exact: selected_deviceId}
                             : undefined,
                         width: {exact: resolution.width},
                         height: {exact: resolution.height},
@@ -163,7 +163,7 @@
                     succeedResolutions.push(i);
                     succeedFrameRates.push(j);
                 } catch (error) {
-                    console.error(`Camera: ${cameraId || 'default'} ResolutionFramerate: ${resolution.width}x${resolution.height}@${frameRate} is not supported`);
+                    console.error(`Camera: ${selected_deviceId || 'default'} ResolutionFramerate: ${resolution.width}x${resolution.height}@${frameRate} is not supported`);
                 }
             }
             const succeedResolutionsLength = succeedResolutions.filter((value, index, self) => self.indexOf(value) === index).length;
@@ -236,7 +236,8 @@
         //     stop
         video.srcObject.getTracks().forEach(track => track.stop());
         populateCameraList().then(() => {
-            populatePropList().then(() => {
+            const selected_deviceId = cameraSelect.value;
+            populatePropList(selected_deviceId).then(() => {
                 initCamera();
             });
         });
@@ -245,7 +246,8 @@
     
     cameraSelect.onchange = () => {
         video.srcObject.getTracks().forEach(track => track.stop());
-        populatePropList().then(() => {
+        const selected_deviceId = cameraSelect.value;
+        populatePropList(selected_deviceId).then(() => {
             initCamera();
         });
     };
